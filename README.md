@@ -47,7 +47,30 @@ Stream result handling is split at the adapter seam:
 
 ## Run
 
-Set a Lumina bearer token:
+Current scenario: run the GHC browser-automation flow, search Bing for `cat`, download the first image, and validate Take Control in the same run.
+
+```powershell
+$ErrorActionPreference = "Stop"
+$tokenScript = "C:\path\to\CopilotLumina\sources\dev\SandboxService\AIAgents\ts-agents\egress-llm\scripts\get-lumina-token.ts"
+$env:PATH = "$env:USERPROFILE\.bun\bin;$env:PATH"
+
+$tokenOutput = & bun $tokenScript 2>&1 | ForEach-Object { $_.ToString() }
+$tokenIndex = [Array]::IndexOf($tokenOutput, "Your access token:")
+if ($tokenIndex -lt 0 -or $tokenIndex + 1 -ge $tokenOutput.Count) {
+  throw "Could not parse token from helper output."
+}
+
+$env:LUMINA_BEARER_TOKEN = $tokenOutput[$tokenIndex + 1].Trim()
+
+dotnet run --project .\lumina-browser-take-control-demo -- `
+  --agent-type ghc `
+  --take-control `
+  --input "open bing.com with browser-automation skill, search cat, and download first image"
+```
+
+The command above assumes you are running from the directory that contains the `lumina-browser-take-control-demo` checkout. If you are already in the repository root, use `dotnet run --project . -- ...` instead.
+
+Alternatively, set a Lumina bearer token directly:
 
 ```powershell
 $env:LUMINA_BEARER_TOKEN = "<token>"
