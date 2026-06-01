@@ -1,6 +1,7 @@
 using Microsoft.Lumina.Common.Models.A2A;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Text.RegularExpressions;
 
 internal static class PartMetadata
 {
@@ -24,7 +25,9 @@ internal static class PartMetadata
 internal static class ScreenshotPath
 {
     private const string ScreenshotDir = "/home/oai/share/output/screenshots/";
-    private const string SavedPrefix = "Screenshot saved: ";
+    private static readonly Regex ScreenshotPathPattern = new(
+        @"/home/oai/share/output/screenshots/[^\s""'`<>]+?\.(?:png|jpe?g|webp)(?=$|[\s""'`<>\)\]\}\.,;:!?])",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly HashSet<string> ScreenshotExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -36,15 +39,19 @@ internal static class ScreenshotPath
 
     public static void CaptureFromOutput(string? outputText, SortedSet<string> screenshotPaths)
     {
-        if (outputText is null || !outputText.StartsWith(SavedPrefix, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(outputText))
         {
             return;
         }
 
-        var filePath = outputText[SavedPrefix.Length..].Trim();
-        if (TryAdd(filePath, screenshotPaths))
+        var match = ScreenshotPathPattern.Match(outputText);
+        if (match.Success)
         {
-            Console.WriteLine($"[Stream] Screenshot captured: {filePath}");
+            var filePath = match.Value;
+            if (TryAdd(filePath, screenshotPaths))
+            {
+                Console.WriteLine($"[Stream] Screenshot captured: {filePath}");
+            }
         }
     }
 
