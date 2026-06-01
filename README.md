@@ -2,7 +2,7 @@
 
 SDK-based .NET 8 console demo for validating the browser-automation and optional Take Control flow from PR 5243015.
 
-The demo uses the real `Microsoft.Lumina` SDK package plus the SDK sample patterns from the Lumina API Demo / .NET partner documentation:
+The demo uses the real `Microsoft.Lumina` SDK package (`2026.5.28.1835`) plus the SDK sample patterns from the Lumina API Demo / .NET partner documentation:
 
 - `ServiceCollection.AddLuminaApiClient()`
 - `ILuminaApiClientFactory.Create(...)`
