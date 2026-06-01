@@ -44,7 +44,8 @@ internal static class ScreenshotPath
             return;
         }
 
-        foreach (Match match in ScreenshotPathPattern.Matches(outputText))
+        var match = ScreenshotPathPattern.Match(outputText);
+        if (match.Success)
         {
             var filePath = match.Value;
             if (TryAdd(filePath, screenshotPaths))
