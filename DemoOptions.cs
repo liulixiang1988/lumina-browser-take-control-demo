@@ -115,7 +115,7 @@ internal sealed class DemoOptions
         Console.WriteLine("Lumina SDK browser automation + Take Control validation demo");
         Console.WriteLine();
         Console.WriteLine("Usage:");
-        Console.WriteLine("  dotnet run --project lumina-browser-take-control-demo -- [options]");
+        Console.WriteLine("  dotnet run --project . -- [options]");
         Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  --endpoint <url>              Default: https://luminaapi-eastus2.sdf.copilotlumina.com");
