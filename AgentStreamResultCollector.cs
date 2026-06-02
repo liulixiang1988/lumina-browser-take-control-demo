@@ -14,8 +14,6 @@ internal sealed class AgentStreamResultCollector
             new SessionResultAdapter(),
             new BrowserAutomationFilePartAdapter(),
             new ReadVerificationAdapter(),
-            new ClaudeCodeToolResultAdapter(),
-            new GhcToolExecutionAdapter(),
         };
     }
 

@@ -55,7 +55,7 @@ internal sealed class LuminaBrowserTakeControlValidator
 
             if (streamResult.ScreenshotPaths.Count == 0)
             {
-                throw new InvalidOperationException("No screenshot paths were discovered from SDK Agent stream tool_result envelopes.");
+                throw new InvalidOperationException("No browser-automation file-part screenshot paths were discovered from the SDK Agent stream.");
             }
 
             await DownloadScreenshotsAsync(streamResult.ScreenshotPaths).ConfigureAwait(false);

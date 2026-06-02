@@ -16,7 +16,7 @@ The validation flow keeps the Lumina SDK calls visible while separating the stre
 1. Open a sandbox.
 2. Send a `skills-agent` A2A `message/stream` request through the SDK Agent API with the production `skillsList` and `browser-automation` enabled.
 3. Optionally write every SDK stream chunk to JSONL as it is returned by `SendAndStreamWithResubscribeAsync(...)`.
-4. Collect screenshot paths from browser-automation `file` parts, with legacy tool-output adapters kept as fallback.
+4. Collect screenshot paths from browser-automation `file` parts.
 5. Download screenshots through SDK `FileSystem.DownloadAsync` while the sandbox is alive.
 6. Optionally create ACS users/room and call SDK `Desktop.TakeControlSessionAsync` / `ReleaseControlSessionAsync`.
 7. Close the sandbox unless `--keep-sandbox` is set.
@@ -40,8 +40,8 @@ Stream result handling is split at the adapter seam:
 | File | Module | What to read there |
 | --- | --- | --- |
 | `AgentStreamResultCollector.cs` | `AgentStreamResultCollector` | Reads artifact metadata and dispatches each stream part to adapters. |
-| `StreamAdapters.cs` | `BrowserAutomationFilePartAdapter`, legacy tool-output adapters, plus session/read adapters | Keeps the preferred browser-automation file artifact path separate from legacy engine-specific tool output parsing. |
-| `StreamParsing.cs` | `PartMetadata`, `ScreenshotPath`, `JsonPayloadExtractor` | Shared parsing helpers for metadata checks, screenshot path validation, and legacy JSON embedded in tool output. |
+| `StreamAdapters.cs` | `BrowserAutomationFilePartAdapter`, plus session/read adapters | Collects source-tagged browser-automation file artifacts directly from SDK `FilePart` fields. |
+| `StreamParsing.cs` | `PartMetadata`, `ScreenshotPath` | Shared parsing helpers for metadata checks and screenshot path validation. |
 | `AgentStreamResult.cs` | `AgentStreamResult` | The accumulated stream state used by the SDK flow. |
 | `DemoOptions.cs` / `TokenLoader.cs` / `DemoTypes.cs` | CLI options, token loading, small value types | Supporting modules kept out of the SDK flow. |
 
@@ -131,7 +131,7 @@ dotnet build .\LuminaBrowserTakeControlDemo.csproj --verbosity quiet
   --run-log $runLog
 ```
 
-In SDF this path reached the GHC runner and used the service default Claude model (`prod-anthropic-claude-opus-4-6`). The demo handles GHC `tool.execution_complete` chunks separately from Claude Code `tool_result` chunks so both result shapes can produce the screenshot path.
+In SDF this path reached the GHC runner and used the service default Claude model (`prod-anthropic-claude-opus-4-6`). Screenshot discovery uses source-tagged browser-automation `file` parts, not agent-engine-specific tool output text.
 
 Use a token file instead of an environment variable:
 
