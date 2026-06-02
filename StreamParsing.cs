@@ -20,13 +20,22 @@ internal static class PartMetadata
             : null;
         return string.Equals(dataType, expectedType, StringComparison.OrdinalIgnoreCase);
     }
+
+    public static bool Equals(Part part, string key, string expectedValue)
+    {
+        var value = part.Metadata?.TryGetValue(key, out var token) == true
+            ? token.ToString()
+            : null;
+        return string.Equals(value, expectedValue, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 internal static class ScreenshotPath
 {
-    private const string ScreenshotDir = "/home/oai/share/output/screenshots/";
+    private const string OutputDir = "/home/oai/share/output/";
+    private const string ScreenshotSegment = "/screenshots/";
     private static readonly Regex ScreenshotPathPattern = new(
-        @"/home/oai/share/output/screenshots/[^\s""'`<>]+?\.(?:png|jpe?g|webp)(?=$|[\s""'`<>\)\]\}\.,;:!?])",
+        @"/home/oai/share/output/(?:[^\s""'`<>]+/)?screenshots/[^\s""'`<>]+?\.(?:png|jpe?g|webp)(?=$|[\s""'`<>\)\]\}\.,;:!?])",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly HashSet<string> ScreenshotExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -62,7 +71,9 @@ internal static class ScreenshotPath
 
     private static bool IsScreenshotPath(string? filePath)
     {
-        if (string.IsNullOrWhiteSpace(filePath) || !filePath.StartsWith(ScreenshotDir, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(filePath)
+            || !filePath.StartsWith(OutputDir, StringComparison.Ordinal)
+            || !filePath.Contains(ScreenshotSegment, StringComparison.Ordinal))
         {
             return false;
         }

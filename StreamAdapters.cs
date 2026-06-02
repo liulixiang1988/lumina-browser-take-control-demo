@@ -46,6 +46,34 @@ internal sealed class ReadVerificationAdapter : IAgentPartAdapter
     }
 }
 
+internal sealed class BrowserAutomationFilePartAdapter : IAgentPartAdapter
+{
+    public bool TryCollect(Part part, AgentStreamResult result)
+    {
+        if (part is not FilePart filePart
+            || filePart.File is null
+            || !PartMetadata.Equals(part, "source", "browser-automation")
+            || !PartMetadata.Equals(part, "eventType", "add")
+            || !IsImageMimeType(filePart.File.MimeType))
+        {
+            return false;
+        }
+
+        var filePath = filePart.File.Uri?.ToString();
+        if (ScreenshotPath.TryAdd(filePath, result.ScreenshotPaths))
+        {
+            Console.WriteLine($"[Stream] Browser automation screenshot artifact: {filePath}");
+        }
+
+        return true;
+    }
+
+    private static bool IsImageMimeType(string? mimeType)
+    {
+        return mimeType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true;
+    }
+}
+
 internal sealed class ClaudeCodeToolResultAdapter : IAgentPartAdapter
 {
     public bool TryCollect(Part part, AgentStreamResult result)

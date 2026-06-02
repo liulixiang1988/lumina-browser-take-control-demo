@@ -16,7 +16,7 @@ The validation flow keeps the Lumina SDK calls visible while separating the stre
 1. Open a sandbox.
 2. Send a `skills-agent` A2A `message/stream` request through the SDK Agent API with the production `skillsList` and `browser-automation` enabled.
 3. Optionally write every SDK stream chunk to JSONL as it is returned by `SendAndStreamWithResubscribeAsync(...)`.
-4. Collect screenshot paths through separate stream adapters for Claude Code and GHC result shapes.
+4. Collect screenshot paths from browser-automation `file` parts, with legacy tool-output adapters kept as fallback.
 5. Download screenshots through SDK `FileSystem.DownloadAsync` while the sandbox is alive.
 6. Optionally create ACS users/room and call SDK `Desktop.TakeControlSessionAsync` / `ReleaseControlSessionAsync`.
 7. Close the sandbox unless `--keep-sandbox` is set.
@@ -24,12 +24,12 @@ The validation flow keeps the Lumina SDK calls visible while separating the stre
 | Flow step | Lumina SDK call | Data retained | Claude Code result shape | GHC result shape |
 | --- | --- | --- | --- | --- |
 | Open sandbox | `client.Sandboxes.OpenSandboxAsync(...)` | Trace/correlation IDs printed in the run log | Same | Same |
-| Invoke browser automation | `client.Agent.SendAndStreamWithResubscribeAsync(...)` | Optional `--stream-log` JSONL, one SDK-returned chunk per line | Tool result uses `metadata.type: "tool_result"`, `data.type: "user.message.tool_result"`, and JSON `content.output` that can contain screenshot paths | Tool completion uses `data.type: "tool.execution_complete"` and JSON under `result.content` / `result.detailedContent`; output can include trailing process text |
-| Verify screenshot path | Stream result adapters in the demo | Screenshot and optional `Read` verification paths printed in summary | `ClaudeCodeToolResultAdapter` extracts `/home/oai/share/output/screenshots/<file>` paths from tool output text | `GhcToolExecutionAdapter` extracts the same path pattern from successful `tool.execution_complete` content |
+| Invoke browser automation | `client.Agent.SendAndStreamWithResubscribeAsync(...)` | Optional `--stream-log` JSONL, one SDK-returned chunk per line | Same | Same |
+| Verify screenshot path | Stream result adapters in the demo | Screenshot and optional `Read` verification paths printed in summary | `BrowserAutomationFilePartAdapter` extracts source-tagged file artifacts where `metadata.source: "browser-automation"` and `metadata.eventType: "add"` | Same |
 | Download screenshot | `client.FileSystem.DownloadAsync(...)` | Local file under `artifacts/screenshots` by default | Same | Same |
 | Optional Take Control | `client.Desktop.TakeControlSessionAsync(...)` / `ReleaseControlSessionAsync(...)` | Trace/correlation IDs printed in the run log | Same | Same |
 
-No `customMetaPrompt` is sent. The current Skills Agent default behavior is expected to save screenshots under `/home/oai/share/output/screenshots/`.
+No `customMetaPrompt` is sent. The current Skills Agent emits screenshot artifacts as `file` parts; use the streamed `file.uri` as the canonical sandbox path, typically under `/home/oai/share/output/<session>/screenshots/`.
 
 ## Code map
 
@@ -40,8 +40,8 @@ Stream result handling is split at the adapter seam:
 | File | Module | What to read there |
 | --- | --- | --- |
 | `AgentStreamResultCollector.cs` | `AgentStreamResultCollector` | Reads artifact metadata and dispatches each stream part to adapters. |
-| `StreamAdapters.cs` | `ClaudeCodeToolResultAdapter`, `GhcToolExecutionAdapter`, plus session/read adapters | Keeps Claude Code and GHC result parsing side by side without mixing their formats. |
-| `StreamParsing.cs` | `PartMetadata`, `ScreenshotPath`, `JsonPayloadExtractor` | Shared parsing helpers for metadata type checks, screenshot path validation, and JSON embedded in tool output. |
+| `StreamAdapters.cs` | `BrowserAutomationFilePartAdapter`, legacy tool-output adapters, plus session/read adapters | Keeps the preferred browser-automation file artifact path separate from legacy engine-specific tool output parsing. |
+| `StreamParsing.cs` | `PartMetadata`, `ScreenshotPath`, `JsonPayloadExtractor` | Shared parsing helpers for metadata checks, screenshot path validation, and legacy JSON embedded in tool output. |
 | `AgentStreamResult.cs` | `AgentStreamResult` | The accumulated stream state used by the SDK flow. |
 | `DemoOptions.cs` / `TokenLoader.cs` / `DemoTypes.cs` | CLI options, token loading, small value types | Supporting modules kept out of the SDK flow. |
 
