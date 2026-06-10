@@ -56,13 +56,13 @@ $env:LUMINA_BEARER_TOKEN = "<token>"
 Run the default SDF + CompliantSydney validation:
 
 ```powershell
-dotnet run --project .\lumina-browser-take-control-demo
+dotnet run --project .
 ```
 
 Pass a custom agent input prompt from the command line:
 
 ```powershell
-dotnet run --project .\lumina-browser-take-control-demo -- `
+dotnet run --project . -- `
   --input "Open https://www.bing.com, take a screenshot, and report the exact screenshot path."
 ```
 
@@ -82,7 +82,7 @@ By default, the request omits agent/model metadata and lets the service use its 
 Equivalent explicit run with endpoint and model metadata:
 
 ```powershell
-dotnet run --project .\lumina-browser-take-control-demo -- `
+dotnet run --project . -- `
   --endpoint https://luminaapi-eastus2.sdf.copilotlumina.com `
   --partner CompliantSydney `
   --scenario-group Mainline `
@@ -101,8 +101,8 @@ $streamLog = ".\artifacts\logs\lumina-sdk-ghc-cc-default-stream-chunks-$timestam
 $runLog = ".\artifacts\logs\lumina-sdk-ghc-cc-default-run-$timestamp.log"
 
 New-Item -ItemType Directory -Force -Path .\artifacts\logs | Out-Null
-dotnet build .\lumina-browser-take-control-demo\LuminaBrowserTakeControlDemo.csproj --verbosity quiet
-.\lumina-browser-take-control-demo\bin\Debug\net8.0\LuminaBrowserTakeControlDemo.exe `
+dotnet build .\LuminaBrowserTakeControlDemo.csproj --verbosity quiet
+.\bin\Debug\net8.0\LuminaBrowserTakeControlDemo.exe `
   --agent-type ghc `
   --stream-log $streamLog `
   --run-log $runLog
@@ -113,13 +113,13 @@ In SDF this path reached the GHC runner and used the service default Claude mode
 Use a token file instead of an environment variable:
 
 ```powershell
-dotnet run --project .\lumina-browser-take-control-demo -- --token-file C:\path\to\auth_token.txt
+dotnet run --project . -- --token-file C:\path\to\auth_token.txt
 ```
 
 Exercise the EPS Take Control endpoints after browser automation succeeds:
 
 ```powershell
-dotnet run --project .\lumina-browser-take-control-demo -- --take-control
+dotnet run --project . -- --take-control
 ```
 
 The Take Control mode provisions two ACS users and one ACS Room through the helper URL, then validates the SDK Desktop API calls. It does not join the ACS Room with an external WebRTC participant.
@@ -143,8 +143,8 @@ $streamLog = ".\artifacts\logs\lumina-sdk-stream-chunks-$timestamp.jsonl"
 $runLog = ".\artifacts\logs\lumina-sdk-run-with-stream-log-$timestamp.log"
 
 New-Item -ItemType Directory -Force -Path .\artifacts\logs | Out-Null
-dotnet build .\lumina-browser-take-control-demo\LuminaBrowserTakeControlDemo.csproj --verbosity quiet
-.\lumina-browser-take-control-demo\bin\Debug\net8.0\LuminaBrowserTakeControlDemo.exe `
+dotnet build .\LuminaBrowserTakeControlDemo.csproj --verbosity quiet
+.\bin\Debug\net8.0\LuminaBrowserTakeControlDemo.exe `
   --stream-log $streamLog `
   --run-log $runLog
 ```
