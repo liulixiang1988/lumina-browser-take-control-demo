@@ -1,4 +1,5 @@
 using Microsoft.Lumina.Common.Models.A2A;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 internal static class PartMetadata
@@ -19,20 +20,19 @@ internal static class PartMetadata
         return string.Equals(dataType, expectedType, StringComparison.OrdinalIgnoreCase);
     }
 
-    public static bool Equals(Part part, string key, string expectedValue)
+    public static bool ValueEquals(Dictionary<string, JToken>? metadata, string key, string expectedValue)
     {
-        var value = part.Metadata?.TryGetValue(key, out var token) == true
-            ? token.ToString()
-            : null;
-        return string.Equals(value, expectedValue, StringComparison.OrdinalIgnoreCase);
+        return metadata?.TryGetValue(key, out var token) == true
+            && string.Equals(token.ToString(), expectedValue, StringComparison.OrdinalIgnoreCase);
     }
 }
 
-internal static class ScreenshotPath
+internal static class OutputImagePath
 {
     private const string OutputDir = "/home/oai/share/output/";
-    private const string ScreenshotSegment = "/screenshots/";
-    private static readonly HashSet<string> ScreenshotExtensions = new(StringComparer.OrdinalIgnoreCase)
+    private const string SavedPrefix = "Screenshot saved: ";
+
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".png",
         ".jpg",
@@ -40,20 +40,125 @@ internal static class ScreenshotPath
         ".webp",
     };
 
-    public static bool TryAdd(string? filePath, SortedSet<string> paths)
+    public static void CaptureFromOutput(string? outputText, SortedSet<string> screenshotPaths)
     {
-        return IsScreenshotPath(filePath) && paths.Add(filePath!);
+        if (outputText is null || !outputText.StartsWith(SavedPrefix, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var filePath = outputText[SavedPrefix.Length..].Trim();
+        if (TryAdd(filePath, screenshotPaths))
+        {
+            Console.WriteLine($"[Stream] Screenshot captured: {filePath}");
+        }
     }
 
-    private static bool IsScreenshotPath(string? filePath)
+    public static bool TryAdd(string? filePath, SortedSet<string> paths)
     {
-        if (string.IsNullOrWhiteSpace(filePath)
-            || !filePath.StartsWith(OutputDir, StringComparison.Ordinal)
-            || !filePath.Contains(ScreenshotSegment, StringComparison.Ordinal))
+        return IsOutputImagePath(filePath) && paths.Add(filePath!);
+    }
+
+    private static bool IsOutputImagePath(string? filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || !filePath.StartsWith(OutputDir, StringComparison.Ordinal))
         {
             return false;
         }
 
-        return ScreenshotExtensions.Contains(Path.GetExtension(filePath));
+        return ImageExtensions.Contains(Path.GetExtension(filePath));
+    }
+}
+
+internal static class ScreenshotPath
+{
+    public static void CaptureFromOutput(string? outputText, SortedSet<string> screenshotPaths)
+    {
+        OutputImagePath.CaptureFromOutput(outputText, screenshotPaths);
+    }
+
+    public static bool TryAdd(string? filePath, SortedSet<string> paths)
+    {
+        return OutputImagePath.TryAdd(filePath, paths);
+    }
+}
+
+internal static class JsonPayloadExtractor
+{
+    public static bool TryParse(string content, out JObject payload)
+    {
+        if (!TryExtractObject(content, out var json))
+        {
+            payload = new JObject();
+            return false;
+        }
+
+        try
+        {
+            payload = JObject.Parse(json);
+            return true;
+        }
+        catch (JsonReaderException)
+        {
+            payload = new JObject();
+            return false;
+        }
+    }
+
+    private static bool TryExtractObject(string content, out string json)
+    {
+        json = string.Empty;
+        var start = content.IndexOf('{');
+        if (start < 0)
+        {
+            return false;
+        }
+
+        var depth = 0;
+        var inString = false;
+        var escaped = false;
+        for (var i = start; i < content.Length; i++)
+        {
+            var current = content[i];
+            if (inString)
+            {
+                if (escaped)
+                {
+                    escaped = false;
+                }
+                else if (current == '\\')
+                {
+                    escaped = true;
+                }
+                else if (current == '"')
+                {
+                    inString = false;
+                }
+
+                continue;
+            }
+
+            if (current == '"')
+            {
+                inString = true;
+                continue;
+            }
+
+            if (current == '{')
+            {
+                depth++;
+            }
+            else if (current == '}')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    json = content[start..(i + 1)];
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

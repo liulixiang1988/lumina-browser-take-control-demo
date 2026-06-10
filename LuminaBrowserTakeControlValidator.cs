@@ -53,12 +53,13 @@ internal sealed class LuminaBrowserTakeControlValidator
             var streamResult = await InvokeSkillsAgentAsync().ConfigureAwait(false);
             PrintStreamSummary(streamResult);
 
-            if (streamResult.ScreenshotPaths.Count == 0)
+            var downloadPaths = streamResult.DownloadPaths.ToArray();
+            if (downloadPaths.Length == 0)
             {
-                throw new InvalidOperationException("No browser-automation file-part screenshot paths were discovered from the SDK Agent stream.");
+                throw new InvalidOperationException("No downloadable image paths were discovered from SDK Agent stream artifacts.");
             }
 
-            await DownloadScreenshotsAsync(streamResult.ScreenshotPaths).ConfigureAwait(false);
+            await DownloadArtifactsAsync(downloadPaths).ConfigureAwait(false);
 
             if (options.TakeControl)
             {
@@ -228,9 +229,9 @@ internal sealed class LuminaBrowserTakeControlValidator
         return writer.WriteLineAsync(json);
     }
 
-    private async Task DownloadScreenshotsAsync(IEnumerable<string> paths)
+    private async Task DownloadArtifactsAsync(IEnumerable<string> paths)
     {
-        Console.WriteLine("[Step 3] Downloading screenshots through SDK FileSystem.DownloadAsync...");
+        Console.WriteLine("[Step 3] Downloading images through SDK FileSystem.DownloadAsync...");
         foreach (var path in paths)
         {
             using var scope = new LuminaRequestScope();
@@ -412,6 +413,12 @@ internal sealed class LuminaBrowserTakeControlValidator
         Console.WriteLine($"  finalSubtype:    {result.FinalSubtype ?? "(none)"}");
         Console.WriteLine($"  screenshots:     {result.ScreenshotPaths.Count}");
         foreach (var path in result.ScreenshotPaths)
+        {
+            Console.WriteLine($"    - {path}");
+        }
+
+        Console.WriteLine($"  browser files:   {result.BrowserAutomationFilePaths.Count}");
+        foreach (var path in result.BrowserAutomationFilePaths)
         {
             Console.WriteLine($"    - {path}");
         }

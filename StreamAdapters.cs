@@ -20,6 +20,28 @@ internal sealed class SessionResultAdapter : IAgentPartAdapter
     }
 }
 
+internal sealed class BrowserAutomationFileAdapter : IAgentPartAdapter
+{
+    public bool TryCollect(Part part, AgentStreamResult result)
+    {
+        if (part is not FilePart filePart
+            || !PartMetadata.ValueEquals(part.Metadata, "source", "browser-automation")
+            || !PartMetadata.ValueEquals(part.Metadata, "eventType", "add")
+            || filePart.File?.Uri is null)
+        {
+            return false;
+        }
+
+        var uri = filePart.File.Uri.ToString();
+        if (OutputImagePath.TryAdd(uri, result.BrowserAutomationFilePaths))
+        {
+            Console.WriteLine($"[Stream] Browser automation file: {uri}");
+        }
+
+        return true;
+    }
+}
+
 internal sealed class ReadVerificationAdapter : IAgentPartAdapter
 {
     public bool TryCollect(Part part, AgentStreamResult result)
@@ -46,30 +68,73 @@ internal sealed class ReadVerificationAdapter : IAgentPartAdapter
     }
 }
 
-internal sealed class BrowserAutomationFilePartAdapter : IAgentPartAdapter
+internal sealed class ClaudeCodeToolResultAdapter : IAgentPartAdapter
 {
     public bool TryCollect(Part part, AgentStreamResult result)
     {
-        if (part is not FilePart filePart
-            || filePart.File is null
-            || !PartMetadata.Equals(part, "source", "browser-automation")
-            || !PartMetadata.Equals(part, "eventType", "add")
-            || !IsImageMimeType(filePart.File.MimeType))
+        if (part is not DataPart dataPart
+            || dataPart.Data is null
+            || !PartMetadata.IsType(part, "tool_result")
+            || !PartMetadata.DataTypeEquals(dataPart.Data, "user.message.tool_result"))
         {
             return false;
         }
 
-        var filePath = filePart.File.Uri?.ToString();
-        if (ScreenshotPath.TryAdd(filePath, result.ScreenshotPaths))
+        if (dataPart.Data.TryGetValue("is_error", out var isError) && isError.Type == JTokenType.Boolean && isError.Value<bool>())
         {
-            Console.WriteLine($"[Stream] Browser automation screenshot artifact: {filePath}");
+            return true;
+        }
+
+        if (dataPart.Data.TryGetValue("content", out var content)
+            && content.Type == JTokenType.String
+            && JsonPayloadExtractor.TryParse(content.ToString(), out var payload))
+        {
+            ScreenshotPath.CaptureFromOutput(payload.Value<string>("output"), result.ScreenshotPaths);
+        }
+
+        return true;
+    }
+}
+
+internal sealed class GhcToolExecutionAdapter : IAgentPartAdapter
+{
+    public bool TryCollect(Part part, AgentStreamResult result)
+    {
+        if (part is not DataPart dataPart
+            || dataPart.Data is null
+            || !PartMetadata.DataTypeEquals(dataPart.Data, "tool.execution_complete"))
+        {
+            return false;
+        }
+
+        if (dataPart.Data.TryGetValue("success", out var success) && success.Type == JTokenType.Boolean && !success.Value<bool>())
+        {
+            return true;
+        }
+
+        var content = GetToolExecutionContent(dataPart.Data);
+        if (content is not null
+            && JsonPayloadExtractor.TryParse(content, out var payload)
+            && payload.Value<bool?>("success") == true)
+        {
+            ScreenshotPath.CaptureFromOutput(payload.Value<string>("output"), result.ScreenshotPaths);
         }
 
         return true;
     }
 
-    private static bool IsImageMimeType(string? mimeType)
+    private static string? GetToolExecutionContent(Dictionary<string, JToken> data)
     {
-        return mimeType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true;
+        if (data.TryGetValue("content", out var content) && content.Type == JTokenType.String)
+        {
+            return content.ToString();
+        }
+
+        if (data.TryGetValue("result", out var result) && result is JObject resultObject)
+        {
+            return resultObject.Value<string>("content") ?? resultObject.Value<string>("detailedContent");
+        }
+
+        return null;
     }
 }

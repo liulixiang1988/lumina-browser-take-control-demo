@@ -2,7 +2,7 @@
 
 SDK-based .NET 8 console demo for validating the browser-automation and optional Take Control flow from PR 5243015.
 
-The demo uses the real `Microsoft.Lumina` SDK package (`2026.5.28.1835`) plus the SDK sample patterns from the Lumina API Demo / .NET partner documentation:
+The demo uses the real `Microsoft.Lumina` SDK package plus the SDK sample patterns from the Lumina API Demo / .NET partner documentation:
 
 - `ServiceCollection.AddLuminaApiClient()`
 - `ILuminaApiClientFactory.Create(...)`
@@ -16,7 +16,7 @@ The validation flow keeps the Lumina SDK calls visible while separating the stre
 1. Open a sandbox.
 2. Send a `skills-agent` A2A `message/stream` request through the SDK Agent API with the production `skillsList` and `browser-automation` enabled.
 3. Optionally write every SDK stream chunk to JSONL as it is returned by `SendAndStreamWithResubscribeAsync(...)`.
-4. Collect screenshot paths from browser-automation `file` parts.
+4. Collect screenshot paths through separate stream adapters for Claude Code and GHC result shapes.
 5. Download screenshots through SDK `FileSystem.DownloadAsync` while the sandbox is alive.
 6. Optionally create ACS users/room and call SDK `Desktop.TakeControlSessionAsync` / `ReleaseControlSessionAsync`.
 7. Close the sandbox unless `--keep-sandbox` is set.
@@ -24,12 +24,12 @@ The validation flow keeps the Lumina SDK calls visible while separating the stre
 | Flow step | Lumina SDK call | Data retained | Claude Code result shape | GHC result shape |
 | --- | --- | --- | --- | --- |
 | Open sandbox | `client.Sandboxes.OpenSandboxAsync(...)` | Trace/correlation IDs printed in the run log | Same | Same |
-| Invoke browser automation | `client.Agent.SendAndStreamWithResubscribeAsync(...)` | Optional `--stream-log` JSONL, one SDK-returned chunk per line | Same | Same |
-| Verify screenshot path | Stream result adapters in the demo | Screenshot and optional `Read` verification paths printed in summary | `BrowserAutomationFilePartAdapter` extracts source-tagged file artifacts where `metadata.source: "browser-automation"` and `metadata.eventType: "add"` | Same |
-| Download screenshot | `client.FileSystem.DownloadAsync(...)` | Local file under `artifacts/screenshots` by default | Same | Same |
+| Invoke browser automation | `client.Agent.SendAndStreamWithResubscribeAsync(...)` | Optional `--stream-log` JSONL, one SDK-returned chunk per line | Tool result uses `metadata.type: "tool_result"`, `data.type: "user.message.tool_result"`, and JSON `content.output: "Screenshot saved: <path>"` | Tool completion uses `data.type: "tool.execution_complete"` and JSON under `result.content` / `result.detailedContent`; output can include trailing process text |
+| Verify downloadable images | Stream result adapters in the demo | Screenshot, browser-automation file, and optional `Read` verification paths printed in summary | `ClaudeCodeToolResultAdapter` extracts `Screenshot saved: /home/oai/share/output/.../<file>`; `BrowserAutomationFileAdapter` also collects `source: browser-automation` file `Uri` values | `GhcToolExecutionAdapter` extracts successful tool output paths; `BrowserAutomationFileAdapter` collects browser screenshots emitted as file parts |
+| Download images | `client.FileSystem.DownloadAsync(...)` | Local file under `artifacts/screenshots` by default | Same | Same |
 | Optional Take Control | `client.Desktop.TakeControlSessionAsync(...)` / `ReleaseControlSessionAsync(...)` | Trace/correlation IDs printed in the run log | Same | Same |
 
-No `customMetaPrompt` is sent. The current Skills Agent emits screenshot artifacts as `file` parts; use the streamed `file.uri` as the canonical sandbox path, typically under `/home/oai/share/output/<session>/screenshots/`.
+No `customMetaPrompt` is sent. The current Skills Agent default behavior is expected to save screenshots under `/home/oai/share/output/screenshots/`.
 
 ## Code map
 
@@ -40,37 +40,14 @@ Stream result handling is split at the adapter seam:
 | File | Module | What to read there |
 | --- | --- | --- |
 | `AgentStreamResultCollector.cs` | `AgentStreamResultCollector` | Reads artifact metadata and dispatches each stream part to adapters. |
-| `StreamAdapters.cs` | `BrowserAutomationFilePartAdapter`, plus session/read adapters | Collects source-tagged browser-automation file artifacts directly from SDK `FilePart` fields. |
-| `StreamParsing.cs` | `PartMetadata`, `ScreenshotPath` | Shared parsing helpers for metadata checks and screenshot path validation. |
+| `StreamAdapters.cs` | `BrowserAutomationFileAdapter`, `ClaudeCodeToolResultAdapter`, `GhcToolExecutionAdapter`, plus session/read adapters | Keeps browser file artifacts, Claude Code results, and GHC result parsing side by side without mixing their formats. |
+| `StreamParsing.cs` | `PartMetadata`, `ScreenshotPath`, `JsonPayloadExtractor` | Shared parsing helpers for metadata type checks, screenshot path validation, and JSON embedded in tool output. |
 | `AgentStreamResult.cs` | `AgentStreamResult` | The accumulated stream state used by the SDK flow. |
 | `DemoOptions.cs` / `TokenLoader.cs` / `DemoTypes.cs` | CLI options, token loading, small value types | Supporting modules kept out of the SDK flow. |
 
 ## Run
 
-Current scenario: run the GHC browser-automation flow, search Bing for `cat`, download the first image, and validate Take Control in the same run.
-
-```powershell
-$ErrorActionPreference = "Stop"
-$tokenScript = "C:\path\to\CopilotLumina\sources\dev\SandboxService\AIAgents\ts-agents\egress-llm\scripts\get-lumina-token.ts"
-$env:PATH = "$env:USERPROFILE\.bun\bin;$env:PATH"
-
-$tokenOutput = & bun $tokenScript 2>&1 | ForEach-Object { $_.ToString() }
-$tokenIndex = [Array]::IndexOf($tokenOutput, "Your access token:")
-if ($tokenIndex -lt 0 -or $tokenIndex + 1 -ge $tokenOutput.Count) {
-  throw "Could not parse token from helper output."
-}
-
-$env:LUMINA_BEARER_TOKEN = $tokenOutput[$tokenIndex + 1].Trim()
-
-dotnet run --project .\lumina-browser-take-control-demo -- `
-  --agent-type ghc `
-  --take-control `
-  --input "open bing.com with browser-automation skill, search cat, and download first image"
-```
-
-The command above assumes you are running from the directory that contains the `lumina-browser-take-control-demo` checkout. If you are already in the repository root, use `dotnet run --project . -- ...` instead.
-
-Alternatively, set a Lumina bearer token directly:
+Set a Lumina bearer token:
 
 ```powershell
 $env:LUMINA_BEARER_TOKEN = "<token>"
@@ -79,13 +56,13 @@ $env:LUMINA_BEARER_TOKEN = "<token>"
 Run the default SDF + CompliantSydney validation:
 
 ```powershell
-dotnet run --project .
+dotnet run --project .\lumina-browser-take-control-demo
 ```
 
 Pass a custom agent input prompt from the command line:
 
 ```powershell
-dotnet run --project . -- `
+dotnet run --project .\lumina-browser-take-control-demo -- `
   --input "Open https://www.bing.com, take a screenshot, and report the exact screenshot path."
 ```
 
@@ -105,7 +82,7 @@ By default, the request omits agent/model metadata and lets the service use its 
 Equivalent explicit run with endpoint and model metadata:
 
 ```powershell
-dotnet run --project . -- `
+dotnet run --project .\lumina-browser-take-control-demo -- `
   --endpoint https://luminaapi-eastus2.sdf.copilotlumina.com `
   --partner CompliantSydney `
   --scenario-group Mainline `
@@ -124,25 +101,25 @@ $streamLog = ".\artifacts\logs\lumina-sdk-ghc-cc-default-stream-chunks-$timestam
 $runLog = ".\artifacts\logs\lumina-sdk-ghc-cc-default-run-$timestamp.log"
 
 New-Item -ItemType Directory -Force -Path .\artifacts\logs | Out-Null
-dotnet build .\LuminaBrowserTakeControlDemo.csproj --verbosity quiet
-.\bin\Debug\net8.0\LuminaBrowserTakeControlDemo.exe `
+dotnet build .\lumina-browser-take-control-demo\LuminaBrowserTakeControlDemo.csproj --verbosity quiet
+.\lumina-browser-take-control-demo\bin\Debug\net8.0\LuminaBrowserTakeControlDemo.exe `
   --agent-type ghc `
   --stream-log $streamLog `
   --run-log $runLog
 ```
 
-In SDF this path reached the GHC runner and used the service default Claude model (`prod-anthropic-claude-opus-4-6`). Screenshot discovery uses source-tagged browser-automation `file` parts, not agent-engine-specific tool output text.
+In SDF this path reached the GHC runner and used the service default Claude model (`prod-anthropic-claude-opus-4-6`). The demo handles GHC `tool.execution_complete` chunks separately from Claude Code `tool_result` chunks so both result shapes can produce the screenshot path.
 
 Use a token file instead of an environment variable:
 
 ```powershell
-dotnet run --project . -- --token-file C:\path\to\auth_token.txt
+dotnet run --project .\lumina-browser-take-control-demo -- --token-file C:\path\to\auth_token.txt
 ```
 
 Exercise the EPS Take Control endpoints after browser automation succeeds:
 
 ```powershell
-dotnet run --project . -- --take-control
+dotnet run --project .\lumina-browser-take-control-demo -- --take-control
 ```
 
 The Take Control mode provisions two ACS users and one ACS Room through the helper URL, then validates the SDK Desktop API calls. It does not join the ACS Room with an external WebRTC participant.
@@ -166,8 +143,8 @@ $streamLog = ".\artifacts\logs\lumina-sdk-stream-chunks-$timestamp.jsonl"
 $runLog = ".\artifacts\logs\lumina-sdk-run-with-stream-log-$timestamp.log"
 
 New-Item -ItemType Directory -Force -Path .\artifacts\logs | Out-Null
-dotnet build .\LuminaBrowserTakeControlDemo.csproj --verbosity quiet
-.\bin\Debug\net8.0\LuminaBrowserTakeControlDemo.exe `
+dotnet build .\lumina-browser-take-control-demo\LuminaBrowserTakeControlDemo.csproj --verbosity quiet
+.\lumina-browser-take-control-demo\bin\Debug\net8.0\LuminaBrowserTakeControlDemo.exe `
   --stream-log $streamLog `
   --run-log $runLog
 ```

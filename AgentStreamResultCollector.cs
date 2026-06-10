@@ -12,8 +12,10 @@ internal sealed class AgentStreamResultCollector
         adapters = new IAgentPartAdapter[]
         {
             new SessionResultAdapter(),
-            new BrowserAutomationFilePartAdapter(),
+            new BrowserAutomationFileAdapter(),
             new ReadVerificationAdapter(),
+            new ClaudeCodeToolResultAdapter(),
+            new GhcToolExecutionAdapter(),
         };
     }
 

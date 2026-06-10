@@ -2,7 +2,11 @@ internal sealed class AgentStreamResult
 {
     public SortedSet<string> ScreenshotPaths { get; } = new(StringComparer.Ordinal);
 
+    public SortedSet<string> BrowserAutomationFilePaths { get; } = new(StringComparer.Ordinal);
+
     public SortedSet<string> ReadPaths { get; } = new(StringComparer.Ordinal);
+
+    public IEnumerable<string> DownloadPaths => ScreenshotPaths.Concat(BrowserAutomationFilePaths).Distinct(StringComparer.Ordinal);
 
     public bool LastChunkSeen { get; set; }
 
